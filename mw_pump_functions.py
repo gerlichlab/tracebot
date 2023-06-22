@@ -86,25 +86,43 @@ class Robot():
         logging.info('Config refreshed.')
 
     def update_status(self, new_data):
-        #Update selected field(s) in status.json file. new_data should be dictionary.
-        with open(self.status_file,'r') as f:
-            data=json.load(f)
-        for k,v in new_data.items():
-            data[k]=new_data[k]
-        with open(self.status_file, 'w') as f:
-            json.dump(data, f)
-        logging.info('Status updated to: '+str(data))
+        '''
+        Update selected field(s) in status.json file.
+        Input:
+            new_data: Dictionary with status commands.
+        '''
+        connected = False
+        while not connected:
+            try:
+                with open(self.status_file,'r') as f:
+                    data=json.load(f)
+                for k,v in new_data.items():
+                    data[k]=new_data[k]
+                with open(self.status_file, 'w') as f:
+                    json.dump(data, f)
+                logging.info('Status updated to: '+str(data))
+                connected = True
+                return
+            except (json.decoder.JSONDecodeError, FileNotFoundError):
+                print('status.json could not be opened, retrying...')
+                time.sleep(5)
 
     def read_status(self):
-        #Read out the status.json file.
-        try:
-            with open(self.status_file,'r') as f:
-                status=json.load(f)
-        except json.decoder.JSONDecodeError:
-            time.sleep(2)
-            with open(self.status_file,'r') as f:
-                status=json.load(f)
-        return status
+        '''
+        Read out the status.json file.
+        Also return the last modification time.
+        '''
+        connected = False
+        while not connected:
+            try:
+                with open(self.status_file,'r') as f:
+                    status = json.load(f)
+                    mtime = os.stat(self.status_file).st_mtime
+                connected = True
+                return status, mtime
+            except (json.decoder.JSONDecodeError, FileNotFoundError):
+                print('status.json could not be opened, retrying...')
+                time.sleep(5)
 
     def set_well(self, well):
         #Convenience function for setting current well status with a string.
@@ -214,7 +232,7 @@ class Robot():
                     logging.info('Stopping robot.')
                     raise SystemExit
 
-                current_pos=self.read_status()['current_well']
+                current_pos, _ =self.read_status()['current_well']
                 coords=self.all_coords[current_pos]
                 self.stage.move_stage(coords)
                 while self.stage.check_stage() != 'Idl': #Wait until move is done before proceeding.
@@ -241,7 +259,7 @@ class Robot():
                 except KeyError:
                     logging.error('Invalid probe position: '+str(param))
 
-            elif action in  ['pump', 'pump_A', 'pump_B']:
+            elif action in  ['pump', 'pump_A', 'pump_B', 'pump_both']:
                 if self.stop.is_set():
                     logging.info('Stopping robot.')
                     raise SystemExit
@@ -264,22 +282,18 @@ class Robot():
                     raise SystemExit
                 self.set_command('image')
                 logging.info('Starting imaging.')
-                try:
-                    status_mod_time_old = os.stat('status.json').st_mtime
-                except OSError:
-                    time.sleep(5)
-                    status_mod_time_old = os.stat('status.json').st_mtime
+                
+                status_mod_time_old, _ = self.read_status()
+
                 time.sleep(2)
                 while True:
-                    try:
-                        status_mod_time_new = os.stat('status.json').st_mtime
-                    except OSError:
-                        time.sleep(5)
-                        status_mod_time_new = os.stat('status.json').st_mtime
+
+                    status_mod_time_new, _ = self.read_status()
+
                     if status_mod_time_new == status_mod_time_old:
                         time.sleep(5)
                     else:
-                        command_status=self.read_status()['command']
+                        command_status, _ = self.read_status()['command']
                         if command_status=='image' or command_status=='imaging':
                             time.sleep(5)
                         else:
@@ -504,15 +518,19 @@ class CPP_pump_dual(CPP_pump):
         d = 0 #Clockwise direction
         if pump == 'pump_A':
             pump_id = '1'
-            I = '10'
+            I = '1000'
         elif pump == 'pump_B':
             pump_id = '2'
-            I = '01'
+            I = '0100'
+        elif pump == 'pump_both':
+            I = '1100'
         if run_time < 0:
             run_time = abs(run_time)
             d = 1 #Counterclockwise direction
-
-        self.pump.write(('/0S'+pump_id+str(self.config['CPP_speed'])+'D'+str(d)+'I1M'+str(run_time*1000)+'I0R\n').encode('utf-8'))
+        if pump == 'pump_both':
+            self.pump.write(('/0S1'+str(self.config['CPP_speed'])+'2'+str(self.config['CPP_speed'])+'D'+str(d)+'I'+I+'M'+str(run_time*1000)+'I0000R\n').encode('utf-8'))
+        else:
+            self.pump.write(('/0S'+pump_id+str(self.config['CPP_speed'])+'D'+str(d)+'I'+I+'M'+str(run_time*1000)+'I0000R\n').encode('utf-8'))
         logging.info('Running pump '+pump+'  '+str(d)+' for '+str(run_time)+' s.')
         time.sleep(run_time)
 

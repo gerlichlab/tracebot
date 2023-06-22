@@ -17,26 +17,38 @@ def update_status(new_data, filename='status.json'):
         new_data: Dictionary with status commands.
         filename: Path to status json file.
     '''
-    with open(filename,'r') as f:
-        data=json.load(f)
-    for k,v in new_data.items():
-        data[k]=new_data[k]
-    with open(filename, 'w') as f:
-        json.dump(data, f)
-    logging.info('Status updated to: '+str(data))
+    connected = False
+    while not connected:
+        try:
+            with open(filename,'r') as f:
+                data=json.load(f)
+            for k,v in new_data.items():
+                data[k]=new_data[k]
+            with open(filename, 'w') as f:
+                json.dump(data, f)
+            logging.info('Status updated to: '+str(data))
+            connected = True
+            return
+        except (json.decoder.JSONDecodeError, FileNotFoundError):
+            print('status.json could not be opened, retrying...')
+            time.sleep(5)
 
 def read_status(filename='status.json'):
     '''
     Read out the status.json file.
+    Also return the last modification time.
     '''
-    try:
-        with open(filename,'r') as f:
-            status = json.load(f)
-    except json.decoder.JSONDecodeError:
-        time.sleep(2)
-        with open(filename,'r') as f:
-            status = json.load(f)
-    return status
+    connected = False
+    while not connected:
+        try:
+            with open(filename,'r') as f:
+                status = json.load(f)
+                mtime = os.stat(filename).st_mtime
+            connected = True
+            return status, mtime
+        except (json.decoder.JSONDecodeError, FileNotFoundError):
+            print('status.json could not be opened, retrying...')
+            time.sleep(5)
 
 def set_command(command, filename='status.json'):
     '''
@@ -60,12 +72,12 @@ def imaging_loop():
     event_image_processed = win32event.CreateEvent(None,0,0,"NIS_Image_Processed")
     
     # Set original file modification time, only check status if file changed.
-    status_mod_time_old = os.stat('status.json').st_mtime
+    _, status_mod_time_old = read_status()
     while True:
         status_mod_time_new = os.stat('status.json').st_mtime
         if status_mod_time_new != status_mod_time_old:
             time.sleep(2)
-            status = read_status()
+            status, _ = read_status()
             if status['command'] == 'image':
                 logging.info('Image command found, starting imaging.')
                 set_command('imaging')
@@ -82,7 +94,7 @@ def imaging_loop():
                      
                 logging.info('Imaging complete.')
                 set_command('robot')
-                status_mod_time_old = os.stat('status.json').st_mtime
+                _, status_mod_time_old = read_status()
         else:
             time.sleep(3)
  
