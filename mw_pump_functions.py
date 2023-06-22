@@ -232,7 +232,8 @@ class Robot():
                     logging.info('Stopping robot.')
                     raise SystemExit
 
-                current_pos, _ =self.read_status()['current_well']
+                status, _ = self.read_status()
+                current_pos = status['current_well']
                 coords=self.all_coords[current_pos]
                 self.stage.move_stage(coords)
                 while self.stage.check_stage() != 'Idl': #Wait until move is done before proceeding.
@@ -293,8 +294,8 @@ class Robot():
                     if status_mod_time_new == status_mod_time_old:
                         time.sleep(5)
                     else:
-                        command_status, _ = self.read_status()['command']
-                        if command_status=='image' or command_status=='imaging':
+                        status, _ = self.read_status()
+                        if status['command']=='image' or status['command']=='imaging':
                             time.sleep(5)
                         else:
                             logging.info('Imaging complete.')
