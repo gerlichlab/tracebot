@@ -12,25 +12,20 @@ Install environment for running tracebot and microscopy automation software on b
 
 Mount (or access) network drive that both PCs can access.
 
-Install miniconda for the OS on your PC (https://docs.conda.io/en/latest/miniconda.html).
-Open Anaconda prompt (miniconda3) in the start menu.
-Upon first run:
-
-```
-cd /path/to/shared/folder
-git clone https://git.embl.de/grp-ellenberg/tracebot
-conda create env –f tracebot/environment.yml –p /path/to/local/env
+Here we activate a virtual environment (e.g., created with `virtualenv`), and install `tracebot`'s dependencies:
+```console
+cd /path/to/shared/folder && source /path/to/your/venv/bin/activate
+git clone https://github.com/gerlichlab/tracebot.git
+cd tracebot && pip install -r requirements.txt
 ```
 
 **Robot setup**
  
 Duplicate configs/robot_config_template.yaml then rename the new file to make a custom config file. Change parameters in file as needed, most parameters should be documented in template config file. COM ports can be verified in Device Manager on the laptop. 
 
-Start the gui:
-```
-conda activate /path/to/local/env
-cd /path/to/shared/folder
-python tracebot/mw_pump_gui.py
+Start the gui, with virtual environment into which you've installed Tracebot's dependencies already activated, and from the tracebot code folder:
+```console
+python ./mw_pump_gui.py
 ```
 
 In the GUI, select the custom config file, and press “Initialize robot”. If all is correct, stage and pump should connect.
@@ -57,11 +52,9 @@ Unchecking “Restart?” will let the robot continue at the previously selected
 
 **Setting up microscope PC (Nikon)**
 
-Start the automation software (remember this has to be in the same folder as the robot PC is running from):
+Start the automation software (remember this has to be in the same folder as the robot PC is running from), from the Tracebot code folder and with Tracebot's virtual environment activated:
 ```
-conda activate /path/to/local/env
-cd /path/to/shared/folder
-python tracebot/auto_image_nikon_jobs.py
+python ./auto_image_nikon_jobs.py
 ```
 
 In the NIS-elements software, open/edit the macro found in /path/to/shared/folder/tracebot/nikon/pythonnissync_events.mac in this repository and run it to set the two functions (pnsSetImageAvailable(), pnsWaitForImageProcessed()). These two functions will create two win32 events, set them and monitor them for changes. These two events are also read/written by auto_image_nikon_jobs.py. In the workflow (typically a JOBS pipeline), run these two functions as appropriate, typically pnsWaitForImageProcessed() at the start of a loop sequence, and pnsSetImageAvailable() at the end.

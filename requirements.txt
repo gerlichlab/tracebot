@@ -1,0 +1,5 @@
+pyserial
+pysimplegui
+pywin32 >= 225; platform_system=='Windows'
+pyyaml
+
